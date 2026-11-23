@@ -1,0 +1,4 @@
+<div class="overview"><div><h2>泊位占位阶段流</h2><ol class="timeline">
+{% for stop in report.pricing.stays[:4] %}<li><time>{{ local(stop.start) }}</time><div><strong>{{ stop.berth }}</strong> <code>{{ stop.vehicle[:8] }}</code><p>{{ stop.minutes }} 分钟 · {{ label[stop.association] }} · {{ yuan(stop.due_cents) }}</p></div></li>{% else %}<li>窗口内暂无停靠。</li>{% endfor %}</ol></div>
+<section class="panel summary"><h3>泊位分钟勾稽</h3><div class="tablebox"><table><thead><tr><th>泊位</th><th>应管</th><th>空闲</th><th>争议</th><th>实计</th></tr></thead><tbody>{% for berth in report.settlement.berths %}<tr><td>{{ berth.berth }}</td><td>{{ berth.scheduled }}</td><td>{{ berth.vacant }}</td><td>{{ berth.disputed }}</td><td>{{ berth.free+berth.base+berth.upgrade }}</td></tr>{% endfor %}</tbody></table></div>
+<p class="difference">逐单净差 {{ yuan(money.difference_cents) }}</p><p>游离回执 {{ yuan(money.orphan_cents) }}</p><a href="{{ path('settlement') }}">对照实收差价 →</a></section></div>

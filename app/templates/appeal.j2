@@ -1,0 +1,1 @@
+<h2>泊位理赔证据</h2>{% if signed %}<p>泊位分钟勾稽差额 <b>{{ signed.minutes_balance }}</b></p><p>证据摘要 <code>{{ signed.sha256 }}</code></p><a class="download" href="/api/export/{{ key }}">下载逐单理赔证据</a>{% else %}<p>先运行清算再签发。</p>{% endif %}

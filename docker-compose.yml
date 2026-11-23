@@ -1,0 +1,7 @@
+services:
+  curb-clearing:
+    build: .
+    ports: ["18471:8000"]
+    volumes: ["curb-dockets:/data"]
+volumes:
+  curb-dockets:

@@ -1,0 +1,8 @@
+:root {
+ --bg:#efedf2; --dock:#f7f4f7; --nav:#e8e0e8; --paper:#fdfafd; --railnode:#f3e9ef;
+ --accent:#a9295a; --accent-deep:#7c2449; --focus:#af3d69; --light:#f2dce7;
+ --muted:#644e60; --ink:#29212b; --line:#ddd2dc; --wire:#c8acc0;
+ --ok:#456b4e; --warn:#865024; --late:#8d244b; --quiet:#746978;
+ --display:"PingFang SC","Microsoft YaHei",sans-serif; --numbers:"SF Mono",Tahoma,monospace;
+ --edge:8px; --gutter:20px; --row:33px; --nav-width:216px;
+}
