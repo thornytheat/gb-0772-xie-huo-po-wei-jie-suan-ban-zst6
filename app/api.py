@@ -11,18 +11,30 @@ api=APIRouter(prefix='/api')
 
 
 @api.get('/cases/{sample}/{stage}')
-def preview(request:Request,sample:str,stage:str):
-    if stage not in STAGES:
+def preview(request:Request,sample:str,stage:str,parent:str|None=None):
+    if stage not in STAGES and stage!='outages':
         raise DocketError('STAGE_BAD','没有这项清算工序',404)
-    data=Clearing(bundle(sample),request.app.state.docket.secret)
-    return getattr(data,stage)
+    docket=request.app.state.docket
+    base=docket.find(parent) if parent else None
+    if parent and base is None:
+        raise DocketError('PARENT_BAD','找不到引用的原清算批次',404)
+    data=Clearing(bundle(sample),docket.secret,base)
+    result=getattr(data,'outage_review' if stage=='outages' else stage)
+    if base is not None and isinstance(result,dict) and data.amendment:
+        result=dict(result) | {'amendment':data.amendment}
+    return result
 
 
 @api.post('/dockets')
 def archive(request:Request,payload:dict):
     record,reused=run(request.app.state.docket,payload)
-    return {'key':record['manifest']['key'],'reused':reused,'manifest':record['manifest'],
-            'totals':record['evidence']['settlement']['totals'],'money':record['evidence']['settlement']['money']}
+    evidence=record['evidence']
+    response={'key':record['manifest']['key'],'reused':reused,'manifest':record['manifest'],
+              'totals':evidence['settlement']['totals'],'money':evidence['settlement']['money'],
+              'pending':evidence['settlement']['pending']}
+    if record['manifest'].get('changes'):
+        response['amendment']=record['manifest']['changes']
+    return response
 
 
 @api.get('/dockets')

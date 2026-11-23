@@ -4,7 +4,7 @@ from app.billing.payments import index
 from app.curb.timeaxis import count
 
 
-def accounting(prices,payments,survey,coverage,disputes):
+def accounting(prices,payments,survey,coverage,disputes,pending=None):
     notes,isolated=index(payments,survey)
     lines=[]
     for stay in prices:
@@ -15,6 +15,7 @@ def accounting(prices,payments,survey,coverage,disputes):
         lines.append({'stay':stay['stay'],'berth':stay['berth'],'vehicle':stay['vehicle'],'arrival':stay['start'],
                       'due_cents':stay['due_cents'],'paid_cents':paid,'difference_cents':delta,'code':code,'receipts':matches})
     orphans=[row | {'code':'ORPHAN'} for matches in notes.values() for row in matches]
+    pending=pending or {}
     duration=count(survey.start,survey.end)
     categories=Counter()
     for row in prices:
@@ -24,11 +25,15 @@ def accounting(prices,payments,survey,coverage,disputes):
     occupied_by_berth=Counter(berth for berth,_ in coverage)
     disputed_by_berth=Counter(berth for berth,_ in disputes)
     balance=[]
+    pending_detail={}
     for berth in survey.berths:
-        balance.append({'berth':berth,'scheduled':duration,'vacant':duration-occupied_by_berth[berth],
-                        'disputed':disputed_by_berth[berth],'free':categories[berth,'FREE'],
+        waiting=min(pending.get(berth,0),duration-occupied_by_berth[berth])
+        pending_detail[berth]=waiting
+        balance.append({'berth':berth,'scheduled':duration,'vacant':duration-occupied_by_berth[berth]-waiting,
+                        'pending':waiting,'disputed':disputed_by_berth[berth],'free':categories[berth,'FREE'],
                         'base':categories[berth,'BASE'],'upgrade':categories[berth,'UPGRADE']})
     totals={key:sum(r[key] for r in balance) for key in ('scheduled','vacant','disputed','free','base','upgrade')}
     money={key:sum(r[key] for r in lines) for key in ('due_cents','paid_cents','difference_cents')}
     money['orphan_cents']=sum(row['cents'] for row in orphans)
-    return {'lines':lines,'isolated':isolated,'orphans':orphans,'berths':balance,'totals':totals,'money':money}
+    return {'lines':lines,'isolated':isolated,'orphans':orphans,'berths':balance,'totals':totals,'money':money,
+            'pending':{'total':sum(pending_detail.values()),'by_berth':pending_detail}}

@@ -43,6 +43,25 @@ class Docket:
             original=db.execute('SELECT content FROM dockets WHERE id=?',(key,)).fetchone()[0]
         return json.loads(original),not inserted
 
+    def amend(self,key,packet):
+        """用补齐后的证据更正原留档，仍是一条记录。
+
+        只有引用原编号的更正才会走到这里；同一更正重跑得到相同证据摘要时
+        视为未变，不写库也不新增历史。比较与写入在同一条 UPDATE 内完成，
+        两个并发更正不会互相覆盖成半份证据。返回 (留档, 是否复用)。
+        """
+        content=serialize(packet)
+        digest_value=packet['manifest'].get('evidence_sha256')
+        with self.connect() as db:
+            changed=db.execute(
+                "UPDATE dockets SET content=? WHERE id=?"
+                " AND json_extract(content,'$.manifest.evidence_sha256') IS NOT ?",
+                (content,key,digest_value)).rowcount==1
+            row=db.execute('SELECT content FROM dockets WHERE id=?',(key,)).fetchone()
+            if row is None:
+                raise DocketError('DOCKET_MISSING','清算留档不存在',404)
+        return json.loads(row[0]),not changed
+
     def manifests(self):
         with self.connect() as db:
             return [json.loads(row[0]) for row in db.execute(

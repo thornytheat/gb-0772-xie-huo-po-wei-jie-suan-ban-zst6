@@ -1,7 +1,7 @@
 # 深度登记 卸货泊位结算板
 
 - 规模：中型
-- 核心规则：先将跨传感器的同车同泊位占用取并集，再按到达时有效预约和本地自然日收费，保留逐单差价。
+- 核心规则：先将跨传感器的同车同泊位占用取并集，再按到达时有效预约和本地自然日收费；杆侧停测申报内无检测的分钟按待核保留，保留逐单差价，补齐后按原留档编号更正。
 
 ## 功能模块
 
@@ -12,8 +12,9 @@
 | M3 占用区间重建 | 查并集、去重分钟与争议格 | `GET /api/cases/dirty/occupancy` | `app/curb/merge.py` `app/curb/grid.py` | `tests/test_occupancy.py` |
 | M4 首免与升级价计算 | 选择一次停靠查看跨日收费分段 | `GET /api/cases/dirty/pricing` | `app/billing/rates.py` | `tests/test_pricing.py` |
 | M5 应实收和泊位对账 | 查看逐单差价、游离回执与泊位容量 | `GET /api/cases/dirty/settlement` | `app/billing/settle.py` `app/billing/payments.py` | `tests/test_settlement.py` |
-| M6 批次留档复跑 | 原子落档、查历史及重放 | `POST /api/dockets` | `app/archive/docket.py` `app/archive/rerun.py` | `tests/test_docket.py` |
-| M7 理赔证据签发 | 签发并核验脱敏证据、摘要与勾稽 | `GET /api/export/{key}` | `app/archive/appeal.py` `app/archive/canonical.py` | `tests/test_appeal.py` |
+| M6 停测待核核算 | 核对各泊位待核与应管分钟，看他杆是否补足 | `GET /api/cases/dirty/outages` | `app/curb/outages.py` | `tests/test_outages.py` |
+| M7 批次留档与更正 | 原子落档、查历史、补齐后按原编号更正 | `POST /api/dockets` | `app/archive/docket.py` `app/archive/rerun.py` `app/archive/amend.py` | `tests/test_docket.py` `tests/test_amend.py` |
+| M8 理赔证据签发 | 签发并核验脱敏证据、摘要与勾稽 | `GET /api/export/{key}` | `app/archive/appeal.py` `app/archive/canonical.py` | `tests/test_appeal.py` |
 
 ## 陷阱登记
 
@@ -28,13 +29,17 @@
 | TRAP-14 | 同一检测编号出现两个结束时刻 | 输入顺序改变结果 | 冲突整组隔离 | `app/source/dedup.py` | `tests/test_intake.py::test_conflicting_sensor_event_never_last_wins` |
 | TRAP-19 | 同泊多车和同车跨泊并存 | 多扣泊位分钟或漏掉争议 | 在各泊位分钟以同泊多车优先 | `app/curb/grid.py` | `tests/test_occupancy.py::test_collision_priority_matches_both_berths` |
 | TRAP-23 | 两杆结束和开始同一分钟 | 重算端点或将一次停靠切开 | 半开并连续合并 | `app/curb/merge.py` | `tests/test_occupancy.py::test_touching_scans_single_stay` |
+| TRAP-29 | 杆侧停测时段没有任何记录 | 缺测分钟被当成空闲结案，或整批等补传 | 申报内无检测的分钟转待核，既不记空闲也不出账 | `app/curb/outages.py` `app/billing/settle.py` | `tests/test_outages.py::test_undeclared_gap_is_pending_not_vacant` |
+| TRAP-33 | 同一泊位另一根杆报了部分停靠 | 整段停测被当成占用，或整段仍待核 | 只把实际覆盖的申报分钟转已核实，其余仍待核 | `app/curb/outages.py` | `tests/test_outages.py::test_other_pole_partial_stop_verifies_only_its_minutes` |
+| TRAP-37 | 晚到杆侧记录补齐后待核分钟已可结案 | 新增一条留档重复出账，或干脆不改账 | 按原留档编号更正，留档不增条、重跑复用 | `app/archive/amend.py` `app/archive/docket.py` | `tests/test_amend.py::test_late_record_clears_pending_and_amends_same_key` |
 
 ## 对账规则
 
 - 脏样检测源 27 = 格式可读 25 + 重复表头 1 + 列数隔离 1。可读 25 再扣车牌 1、范围与重复编号等 4，采信 20。
-- 应管 240 = 空闲 133 + 争议 7 + 首免 10 + 基础价 68 + 升级价 22。实收 2310 分 − 应收 2240 分 = 逐单差价 70 分，游离回执 140 分另列。
-- 归档键以规则版本和输入全摘要生成，留档提交为单事务。重复提交取原运行快照，原件变动产生不同记录。
+- 应管 240 = 空闲 133 + 待核 0 + 争议 7 + 首免 10 + 基础价 68 + 升级价 22。实收 2310 分 − 应收 2240 分 = 逐单差价 70 分，游离回执 140 分另列。
+- 申报停测后，申报内无检测的分钟从空闲移入待核，应管分钟总数不变；他杆检测覆盖的申报分钟按实际停靠出账并计入他杆补足。
+- 归档键以规则版本和输入全摘要生成，留档提交为单事务。重复提交取原运行快照，原件变动产生不同记录。引用原编号更正时留档编号不变，原摘要进入 `history`，同一份补齐输入重跑复用原记录。
 
 ## 已知边界
 
-只使用完整杆侧区间，传感器失明但缺少额外证据的分钟按空闲计算；覆盖不完整的窗口应由外部系统重采。回执关联使用准确到达分钟，不模糊猜测。退款、法定票据签章及跨区共享付费档位由外部流程处理。
+只使用完整杆侧区间；未申报的传感器失明分钟仍按空闲计算，已申报停测且无检测的分钟按待核保留，覆盖不完整的窗口应由外部系统补传或重采。同一泊位他杆只补足其实际覆盖的分钟，不推断其余停测分钟。回执关联使用准确到达分钟，不模糊猜测。退款、法定票据签章及跨区共享付费档位由外部流程处理。

@@ -9,3 +9,18 @@
 证据附件包含 `evidence` 和留档的 `manifest`。校验时用 UTF-8 JSON 序列化，递归排序字典键，保留中文，逗号及冒号不留空白。对 `evidence` 算 SHA-256，应等于 `manifest.evidence_sha256`。对 `{manifest,evidence}` 算相同摘要，应等于根对象的 `sha256`。
 
 `pricing.stays` 保留停靠源行、到达时预约和相同费率连续段，`settlement.lines` 列出回执来源与差价，`occupancy.disputes` 定位争议分钟。可用原件 SHA-256 对照来源。明文车牌和识别密钥留在各自的输入系统和工作台数据库中。
+
+## 复核停测时段与更正
+
+停测由 `survey.outages` 申报。申报内没有检测的分钟记为待核，对账页「泊位待核与应管」逐泊位给出停测、已核实、他杆补足、待核分钟和应管分钟；`GET /api/cases/dirty/outages` 给出同样口径，并带 `pending_ranges`、`covered_ranges`、`other_pole_ranges`。
+
+同一泊位若还有另一根杆报了部分停靠，仅它覆盖到的申报分钟转为已核实并随停靠出账，其余仍待核。所以单个泊位的缺口不会把整批拖住，也不会把缺测当成空位。
+
+晚到杆侧记录补齐后，用原留档编号更正：
+
+```sh
+curl -s localhost:18471/api/dockets -H 'Content-Type: application/json' \
+  -d '{"bundle": {...四份原件...}, "parent": "<原留档编号>"}'
+```
+
+更正沿用原留档编号，`manifest.changes` 逐泊位列出待核、空闲、争议与出账分钟的前后值，应收差额随证据落档；原摘要进入 `manifest.history`，可核对历次更正。同一份补齐输入重跑复用原记录，不重复出账，也不新增留档。更正必须沿用原批次的清算窗口、泊位和规则版本，否则以 `PARENT_BAD` 拒绝。证据附件仍可各自签发与核验。

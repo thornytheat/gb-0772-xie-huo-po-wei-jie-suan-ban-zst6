@@ -16,6 +16,9 @@ def scrub(entries,salt):
     good,bad=[],[]
     for row in entries:
         fields=row['fields']
+        if 'plate' not in fields:
+            good.append(row)
+            continue
         clean=row | {'fields':{k:v for k,v in fields.items() if k!='plate'}}
         try:
             good.append(clean | {'vehicle':token(fields['plate'],salt)})

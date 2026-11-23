@@ -8,7 +8,7 @@ def issue(packet):
         raise DocketError('DIGEST_BAD','证据内容与留档摘要不同',409)
     account=evidence['settlement']
     for row in account['berths']:
-        remainder=row['scheduled']-sum(row[key] for key in ('vacant','disputed','free','base','upgrade'))
+        remainder=row['scheduled']-sum(row.get(key,0) for key in ('vacant','pending','disputed','free','base','upgrade'))
         if remainder:
             raise DocketError('BERTH_UNBALANCED','泊位分钟勾稽未平',409)
     money=account['money']
